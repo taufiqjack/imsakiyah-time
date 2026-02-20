@@ -52,3 +52,16 @@ please auto selecting Kabupaten/Kota to county and add Kab. or Kota
 please fix manual to Kota Jakarta, DKI Jakarta
 11. auto reload data when location is allowed, and default location is Kota Jakarta, DKI Jakarta
 12. when open and reload web, auto detect location not jakarta but in not allowed location default is Kota Jakarta
+13. remove jakarta to default time, change detech from location
+14. the log is :
+ County found: "Demak" → Will use "Kab. Demak" App.jsx:230:19
+📋 Final city name for matching: "Kab. Demak" App.jsx:253:19
+🎯 Calling setLocation with: province="Jawa Tengah", city="Kab. Demak" App.jsx:259:17
+🎯 Setting location: Jawa Tengah - Kab. Demak App.jsx:374:13
+📍 Geolocation permission state: prompt App.jsx:43:19
+📋 Loaded 0 cities for Jawa Tengah App.jsx:377:13
+⚠️ No cities list provided App.jsx:318:15
+📍 Geolocation permission state: prompt
+
+please get location this
+15. change UI to modern design and support to darkmode

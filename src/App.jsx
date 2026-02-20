@@ -3,33 +3,56 @@ import './App.css'
 
 const API_BASE = 'https://equran.id/api/v2/imsakiyah'
 
-// Default location: Jakarta
-const DEFAULT_PROVINCE = 'DKI Jakarta'
-const DEFAULT_CITY = 'Kota Jakarta'
-
 function App() {
   const [provinces, setProvinces] = useState([])
-  const [cities, setCities] = useState([])
   const [schedule, setSchedule] = useState(null)
   const [scheduleMeta, setScheduleMeta] = useState(null)
-  const [selectedProvince, setSelectedProvince] = useState(DEFAULT_PROVINCE)
-  const [selectedCity, setSelectedCity] = useState(DEFAULT_CITY)
+  const [selectedProvince, setSelectedProvince] = useState(null)
+  const [selectedCity, setSelectedCity] = useState(null)
   const [loading, setLoading] = useState(false)
   const [locating, setLocating] = useState(true)
   const [locationError, setLocationError] = useState(null)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [currentTime, setCurrentTime] = useState(new Date())
   const [ramadanStartDate, setRamadanStartDate] = useState(null)
+  const [darkMode, setDarkMode] = useState(false)
+
+  // Initialize dark mode from localStorage or system preference
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+
+    if (savedTheme) {
+      setDarkMode(savedTheme === 'dark')
+      document.documentElement.setAttribute('data-theme', savedTheme)
+    } else if (prefersDark) {
+      setDarkMode(true)
+      document.documentElement.setAttribute('data-theme', 'dark')
+    }
+  }, [])
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newMode = !darkMode
+    setDarkMode(newMode)
+    document.documentElement.setAttribute('data-theme', newMode ? 'dark' : 'light')
+    localStorage.setItem('theme', newMode ? 'dark' : 'light')
+  }
 
   // Fetch provinces on mount
   useEffect(() => {
     fetchProvinces()
   }, [])
 
-  // Detect user location after provinces are loaded
+  // Detect user location after provinces are loaded (with delay)
   useEffect(() => {
     if (provinces.length > 0) {
-      detectLocation()
+      const delayTimer = setTimeout(() => {
+        console.log('⏰ Delay complete, starting location detection...')
+        detectLocation()
+      }, 2000) // 2 seconds delay
+
+      return () => clearTimeout(delayTimer)
     }
   }, [provinces])
 
@@ -94,8 +117,7 @@ function App() {
 
   const fetchCities = async (province) => {
     if (!province) {
-      setCities([])
-      return
+      return []
     }
     try {
       const response = await fetch(`${API_BASE}/kabkota`, {
@@ -104,9 +126,10 @@ function App() {
         body: JSON.stringify({ provinsi: province })
       })
       const data = await response.json()
-      setCities(data.data || [])
+      return data.data || []
     } catch (error) {
       console.error('Error fetching cities:', error)
+      return []
     }
   }
 
@@ -372,43 +395,22 @@ function App() {
   const setLocation = async (province, cityName) => {
     console.log(`🎯 Setting location: ${province} - ${cityName}`)
     setSelectedProvince(province)
-    await fetchCities(province)
-    console.log(`📋 Loaded ${cities.length} cities for ${province}`)
+    const citiesList = await fetchCities(province)
+    console.log(`📋 Loaded ${citiesList.length} cities for ${province}`)
 
     // Find matching city from loaded cities
-    const matched = findMatchingCity(cityName, cities)
-    const finalCity = matched || cities[0] || DEFAULT_CITY
-    console.log(`🏙️ Final city selected: "${finalCity}"`)
-    setSelectedCity(finalCity)
-    setLocating(false)
-  }
-
-  const setDefaultLocation = async () => {
-    console.log(`🏠 Using default location: ${DEFAULT_PROVINCE} - ${DEFAULT_CITY}`)
-    if (provinces.includes(DEFAULT_PROVINCE)) {
-      setSelectedProvince(DEFAULT_PROVINCE)
-      const citiesList = await fetchCitiesForProvince(DEFAULT_PROVINCE)
-      setSelectedCity(DEFAULT_CITY)
+    const matched = findMatchingCity(cityName, citiesList)
+    const finalCity = matched || citiesList[0]
+    if (finalCity) {
+      console.log(`🏙️ Final city selected: "${finalCity}"`)
+      setSelectedCity(finalCity)
     }
     setLocating(false)
   }
 
-  const fetchCitiesForProvince = async (province) => {
-    if (!province) return []
-    try {
-      const response = await fetch(`${API_BASE}/kabkota`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provinsi: province })
-      })
-      const data = await response.json()
-      const citiesList = data.data || []
-      setCities(citiesList)
-      return citiesList
-    } catch (error) {
-      console.error('Error fetching cities:', error)
-      return []
-    }
+  const setDefaultLocation = () => {
+    console.log(`❌ Location detection failed, no default location set`)
+    setLocating(false)
   }
 
   const retryLocation = () => detectLocation()
@@ -479,6 +481,15 @@ function App() {
 
   return (
     <div className="app">
+      {/* Theme Toggle Button */}
+      <button
+        className="theme-toggle"
+        onClick={toggleDarkMode}
+        aria-label="Toggle dark mode"
+      >
+        {darkMode ? '☀️' : '🌙'}
+      </button>
+
       <header className="header">
         <h1>Jadwal Imsakiyah</h1>
         <p className="subtitle">Waktu Sholat & Imsakiyah</p>
@@ -486,9 +497,11 @@ function App() {
           <p className="ramadan-info">Ramadan {scheduleMeta.hijriah} H</p>
         )}
         {selectedCity && selectedProvince && (
-          <button className="location-info-header" onClick={retryLocation} disabled={locating}>
-            {locating ? '🔄' : '📍'} {selectedCity}, {selectedProvince}
-          </button>
+          <div className="location-wrapper">
+            <button className="location-info-header" onClick={retryLocation} disabled={locating}>
+              {locating ? '🔄' : '📍'} {selectedCity}, {selectedProvince}
+            </button>
+          </div>
         )}
         {/* Location Detection Button */}
 
