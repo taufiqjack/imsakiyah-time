@@ -1,3 +1,5 @@
 Jadwal Imsakiyah Indonesia
 
-```npm run dev
+```bash
+npm install
+npm run dev
