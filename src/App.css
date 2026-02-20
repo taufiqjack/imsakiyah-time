@@ -93,6 +93,38 @@ body {
   transform: scale(1.1);
 }
 
+/* Adhan Master Toggle */
+.adhan-master-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 5rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  font-size: 1.25rem;
+}
+
+.adhan-master-toggle.enabled {
+  background: rgba(79, 172, 254, 0.3);
+  border-color: rgba(79, 172, 254, 0.5);
+  box-shadow: 0 0 15px rgba(79, 172, 254, 0.3);
+}
+
+.adhan-master-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
 /* Header */
 .header {
   text-align: center;
@@ -347,6 +379,53 @@ body {
   color: var(--text-primary);
 }
 
+.prayer-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.adhan-play-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.adhan-play-btn:hover {
+  background: var(--card-hover);
+  transform: scale(1.1);
+}
+
+.prayer-row.active .adhan-play-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: white;
+}
+
+.prayer-row.playing {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border: none;
+}
+
+.prayer-row.playing .prayer-name,
+.prayer-row.playing .prayer-time {
+  color: white;
+}
+
+.prayer-row.playing .adhan-play-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: white;
+}
+
 /* Locating Status */
 .locating-status {
   text-align: center;
@@ -471,6 +550,13 @@ body {
   .theme-toggle {
     top: 0.5rem;
     right: 0.5rem;
+    width: 42px;
+    height: 42px;
+  }
+
+  .adhan-master-toggle {
+    top: 0.5rem;
+    right: 4rem;
     width: 42px;
     height: 42px;
   }

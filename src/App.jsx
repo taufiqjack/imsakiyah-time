@@ -16,6 +16,10 @@ function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [ramadanStartDate, setRamadanStartDate] = useState(null)
   const [darkMode, setDarkMode] = useState(false)
+  const [playingAdhan, setPlayingAdhan] = useState(null)
+  const [adhanEnabled, setAdhanEnabled] = useState(true)
+  const [audioInstance, setAudioInstance] = useState(null)
+  const [lastNotificationMinute, setLastNotificationMinute] = useState(null)
 
   // Initialize dark mode from localStorage or system preference
   useEffect(() => {
@@ -29,6 +33,19 @@ function App() {
       setDarkMode(true)
       document.documentElement.setAttribute('data-theme', 'dark')
     }
+
+    // Initialize adhan enabled from localStorage
+    const savedAdhanEnabled = localStorage.getItem('adhanEnabled')
+    if (savedAdhanEnabled !== null) {
+      setAdhanEnabled(savedAdhanEnabled === 'true')
+    }
+
+    // Request notification permission on app load
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('🔔 Notification permission on load:', permission)
+      })
+    }
   }, [])
 
   // Toggle dark mode
@@ -37,6 +54,84 @@ function App() {
     setDarkMode(newMode)
     document.documentElement.setAttribute('data-theme', newMode ? 'dark' : 'light')
     localStorage.setItem('theme', newMode ? 'dark' : 'light')
+  }
+
+  // Toggle adhan enabled/disabled (Master Toggle)
+  const toggleAdhanEnabled = () => {
+    const newValue = !adhanEnabled
+    setAdhanEnabled(newValue)
+    localStorage.setItem('adhanEnabled', String(newValue))
+
+    // Request notification permission when enabling
+    if (newValue && 'Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission().then(permission => {
+        console.log('🔔 Notification permission:', permission)
+      })
+    }
+
+    // Stop any playing adhan when disabling
+    if (!newValue && audioInstance) {
+      audioInstance.pause()
+      setAudioInstance(null)
+      setPlayingAdhan(null)
+    }
+  }
+
+  // Toggle play/stop adhan for specific prayer time
+  const toggleAdhan = (prayerName) => {
+    // If clicking on the currently playing adhan, stop it
+    if (playingAdhan === prayerName && audioInstance) {
+      audioInstance.pause()
+      setAudioInstance(null)
+      setPlayingAdhan(null)
+      console.log(`⏹️ Stopped adhan for ${prayerName}`)
+      return
+    }
+
+    // Stop any currently playing adhan first
+    if (audioInstance) {
+      audioInstance.pause()
+      setAudioInstance(null)
+    }
+
+    // Use special adhan for Subuh, regular for others
+    const audioUrl = prayerName === 'Subuh'
+      ? 'https://rencanggunung.com/mp3/adzan_shubuh.mp3'
+      : 'https://rencanggunung.com/mp3/adzan.mp3'
+
+    console.log(`🕌 Playing adhan for ${prayerName}...`)
+    setPlayingAdhan(prayerName)
+
+    const audio = new Audio(audioUrl)
+
+    audio.addEventListener('ended', () => {
+      console.log(`✅ Adhan for ${prayerName} finished`)
+      setAudioInstance(null)
+      setPlayingAdhan(null)
+    })
+
+    audio.addEventListener('error', (e) => {
+      console.error(`❌ Error playing adhan for ${prayerName}:`, e)
+      setAudioInstance(null)
+      setPlayingAdhan(null)
+    })
+
+    setAudioInstance(audio)
+    audio.play().catch(err => {
+      console.error(`❌ Failed to play adhan for ${prayerName}:`, err)
+      setAudioInstance(null)
+      setPlayingAdhan(null)
+    })
+  }
+
+  // Show system notification
+  const showNotification = (prayerName, time) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(`Waktu ${prayerName} telah tiba`, {
+        body: `Waktu ${prayerName} untuk wilayah ${selectedCity} adalah pukul ${time}`,
+        icon: '/imsakiyah.png'
+      })
+    }
   }
 
   // Fetch provinces on mount
@@ -96,6 +191,49 @@ function App() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Auto-trigger adhan when prayer time is reached
+  useEffect(() => {
+    if (!adhanEnabled || !schedule || !selectedCity) return
+
+    const now = new Date()
+    const currentMinStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+
+    // Unique identifier for this minute to prevent multiple triggers
+    const minuteId = `${now.getDate()}-${now.getMonth()}-${now.getFullYear()}-${now.getHours()}-${now.getMinutes()}`
+
+    if (lastNotificationMinute === minuteId) return
+
+    // Get today's schedule
+    const diffTime = currentDate - ramadanStartDate
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1
+    const todayScheduleData = schedule.find(item => item.tanggal === diffDays)
+
+    if (!todayScheduleData) return
+
+    const prayers = [
+      { name: 'Subuh', time: todayScheduleData.subuh, hasAdhan: true },
+      { name: 'Zuhur', time: todayScheduleData.dzuhur, hasAdhan: true },
+      { name: 'Asar', time: todayScheduleData.ashar, hasAdhan: true },
+      { name: 'Maghrib', time: todayScheduleData.maghrib, hasAdhan: true },
+      { name: 'Isya', time: todayScheduleData.isya, hasAdhan: true }
+    ]
+
+    const matchedPrayer = prayers.find(p => p.time === currentMinStr)
+
+    if (matchedPrayer) {
+      console.log(`⏰ Time match found for ${matchedPrayer.name} at ${currentMinStr}`)
+      setLastNotificationMinute(minuteId)
+
+      // Show visual notification
+      showNotification(matchedPrayer.name, matchedPrayer.time)
+
+      // Play audio if it has adhan
+      if (matchedPrayer.hasAdhan) {
+        toggleAdhan(matchedPrayer.name)
+      }
+    }
+  }, [currentTime, adhanEnabled, schedule, ramadanStartDate, currentDate, selectedCity, lastNotificationMinute])
 
   // Fetch schedule when province and city are selected
   useEffect(() => {
@@ -490,6 +628,16 @@ function App() {
         {darkMode ? '☀️' : '🌙'}
       </button>
 
+      {/* Adhan Master Toggle Button */}
+      <button
+        className={`adhan-master-toggle ${adhanEnabled ? 'enabled' : ''}`}
+        onClick={toggleAdhanEnabled}
+        aria-label="Toggle adhan"
+        title={adhanEnabled ? 'Adzan dinyalakan' : 'Adzan dimatikan'}
+      >
+        {adhanEnabled ? '🔔' : '🔕'}
+      </button>
+
       <header className="header">
         <h1>Jadwal Imsakiyah</h1>
         <p className="subtitle">Waktu Sholat & Imsakiyah</p>
@@ -593,6 +741,9 @@ function App() {
                 time={todaySchedule[key]}
                 isActive={getNextPrayer?.name === name}
                 currentMinutes={currentMinutes}
+                hasAdhan={['Subuh', 'Zuhur', 'Asar', 'Maghrib', 'Isya'].includes(name) && adhanEnabled}
+                isPlaying={playingAdhan === name}
+                onToggleAdhan={() => toggleAdhan(name)}
               />
             ))}
           </div>
@@ -613,14 +764,25 @@ function App() {
   )
 }
 
-function PrayerTimeRow({ name, time, isActive, currentMinutes }) {
+function PrayerTimeRow({ name, time, isActive, currentMinutes, hasAdhan, isPlaying, onToggleAdhan }) {
   const [hours, minutes] = time.split(':').map(Number)
   const prayerMinutes = hours * 60 + minutes
   const isPassed = prayerMinutes < currentMinutes
 
   return (
-    <div className={`prayer-row ${isActive ? 'active' : ''} ${isPassed ? 'passed' : ''}`}>
-      <span className="prayer-name">{name}</span>
+    <div className={`prayer-row ${isActive ? 'active' : ''} ${isPassed ? 'passed' : ''} ${isPlaying ? 'playing' : ''}`}>
+      <div className="prayer-info">
+        <span className="prayer-name">{name}</span>
+        {hasAdhan && (
+          <button
+            className="adhan-play-btn"
+            onClick={onToggleAdhan}
+            title={isPlaying ? 'Stop adzan' : 'Putar adzan'}
+          >
+            {isPlaying ? '⏹️' : '🔔'}
+          </button>
+        )}
+      </div>
       <span className="prayer-time">{time}</span>
     </div>
   )

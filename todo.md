@@ -65,3 +65,6 @@ please fix manual to Kota Jakarta, DKI Jakarta
 
 please get location this
 15. change UI to modern design and support to darkmode
+16. implement adzan for all time sholat from link https://rencanggunung.com/mp3/adzan.mp3 use toggle to play and only shubuh, implement adzan for Subuh time from link https://rencanggunung.com/mp3/adzan_shubuh.mp3
+17. change toggle to play/stop adzan
+18. add toggle to enable or disable adzan when sholat time
