@@ -1,0 +1,402 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+  min-height: 100vh;
+}
+
+#root {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: white;
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  color: #a0aec0;
+}
+
+.location-info-header {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin-top: 1rem;
+  color: #90cdf4;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.location-info-header:hover:not(:disabled) {
+  background: rgba(144, 205, 244, 0.1);
+  transform: translateY(-1px);
+}
+
+.location-info-header:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.location-info-header:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Container */
+.container {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* Location Selector */
+.location-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+}
+
+.form-group select {
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.form-group select:hover {
+  border-color: #cbd5e0;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+
+.form-group select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Date Navigation */
+.date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+}
+
+.date-nav button {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.date-nav button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.date-display {
+  flex: 1;
+  text-align: center;
+}
+
+.date-text {
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  display: block;
+}
+
+.today-badge {
+  display: inline-block;
+  background: #48bb78;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+
+.today-btn {
+  margin-top: 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+
+.today-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Current Time */
+.current-time {
+  text-align: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  color: white;
+}
+
+.time-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+  margin-bottom: 0.5rem;
+}
+
+.time-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  font-family: 'Courier New', monospace;
+}
+
+.next-prayer {
+  font-size: 1rem;
+  opacity: 0.95;
+}
+
+.next-prayer span {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #718096;
+}
+
+.loading p {
+  font-size: 1.1rem;
+}
+
+/* Prayer Times */
+.prayer-times {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.prayer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #f7fafc;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.prayer-row:hover {
+  background: #edf2f7;
+}
+
+.prayer-row.active {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
+  transform: scale(1.02);
+}
+
+.prayer-row.passed {
+  opacity: 0.5;
+}
+
+.prayer-name {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.prayer-time {
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+/* Location Info */
+.location-info {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #edf2f7;
+  border-radius: 10px;
+  color: #4a5568;
+}
+
+.location-info p {
+  font-size: 0.95rem;
+}
+
+/* Locating Status */
+.locating-status {
+  text-align: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  color: white;
+}
+
+.locating-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 1rem;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.locating-status p {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* Location Error */
+.location-error {
+  text-align: center;
+  padding: 1rem 1.5rem;
+  background: #fed7d7;
+  border: 1px solid #fc8181;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  color: #742a2a;
+}
+
+.location-error p {
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.retry-btn {
+  background: #4299e1;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.retry-btn:hover {
+  background: #3182ce;
+  transform: translateY(-1px);
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.footer a {
+  color: #90cdf4;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+  .header h1 {
+    font-size: 2rem;
+  }
+
+  .location-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .date-nav {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .time-value {
+    font-size: 2rem;
+  }
+
+  .prayer-name {
+    font-size: 1rem;
+  }
+
+  .prayer-time {
+    font-size: 1.1rem;
+  }
+}

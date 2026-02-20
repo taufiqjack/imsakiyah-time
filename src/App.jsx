@@ -1,0 +1,616 @@
+import { useState, useEffect, useMemo } from 'react'
+import './App.css'
+
+const API_BASE = 'https://equran.id/api/v2/imsakiyah'
+
+// Default location: Jakarta
+const DEFAULT_PROVINCE = 'DKI Jakarta'
+const DEFAULT_CITY = 'Kota Jakarta'
+
+function App() {
+  const [provinces, setProvinces] = useState([])
+  const [cities, setCities] = useState([])
+  const [schedule, setSchedule] = useState(null)
+  const [scheduleMeta, setScheduleMeta] = useState(null)
+  const [selectedProvince, setSelectedProvince] = useState(DEFAULT_PROVINCE)
+  const [selectedCity, setSelectedCity] = useState(DEFAULT_CITY)
+  const [loading, setLoading] = useState(false)
+  const [locating, setLocating] = useState(true)
+  const [locationError, setLocationError] = useState(null)
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [ramadanStartDate, setRamadanStartDate] = useState(null)
+
+  // Fetch provinces on mount
+  useEffect(() => {
+    fetchProvinces()
+  }, [])
+
+  // Detect user location after provinces are loaded
+  useEffect(() => {
+    if (provinces.length > 0) {
+      detectLocation()
+    }
+  }, [provinces])
+
+  // Monitor location permission changes and auto-reload when allowed
+  useEffect(() => {
+    // Check if browser supports permission API for geolocation
+    if (navigator.permissions) {
+      const checkPermission = () => {
+        navigator.permissions.query({ name: 'geolocation' }).then(permissionStatus => {
+          console.log('📍 Geolocation permission state:', permissionStatus.state)
+
+          // If permission is granted, try to detect location again
+          if (permissionStatus.state === 'granted') {
+            console.log('✅ Location permission granted, auto-detecting location...')
+            // Only detect if we're not already locating or don't have a location set
+            if (!locating && (!selectedProvince || !selectedCity)) {
+              detectLocation()
+            }
+          }
+
+          // Listen for permission changes
+          permissionStatus.addEventListener('change', () => {
+            console.log('📍 Geolocation permission changed to:', permissionStatus.state)
+            if (permissionStatus.state === 'granted') {
+              console.log('✅ Location permission newly granted, reloading data...')
+              setLocationError(null)
+              detectLocation()
+            }
+          })
+        }).catch(err => {
+          console.log('⚠️ Permission API not fully supported:', err)
+        })
+      }
+
+      checkPermission()
+    }
+  }, [locating, selectedProvince, selectedCity, provinces])
+
+  // Update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Fetch schedule when province and city are selected
+  useEffect(() => {
+    if (selectedProvince && selectedCity) {
+      fetchSchedule()
+    }
+  }, [selectedProvince, selectedCity])
+
+  // API Functions
+  const fetchProvinces = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/provinsi`)
+      const data = await response.json()
+      setProvinces(data.data || [])
+    } catch (error) {
+      console.error('Error fetching provinces:', error)
+    }
+  }
+
+  const fetchCities = async (province) => {
+    if (!province) {
+      setCities([])
+      return
+    }
+    try {
+      const response = await fetch(`${API_BASE}/kabkota`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provinsi: province })
+      })
+      const data = await response.json()
+      setCities(data.data || [])
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+    }
+  }
+
+  const fetchSchedule = async () => {
+    if (!selectedProvince || !selectedCity) return
+
+    setLoading(true)
+    try {
+      const response = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provinsi: selectedProvince,
+          kabkota: selectedCity
+        })
+      })
+      const data = await response.json()
+
+      if (data.data) {
+        setSchedule(data.data.imsakiyah || [])
+        setScheduleMeta({
+          provinsi: data.data.provinsi,
+          kabkota: data.data.kabkota,
+          hijriah: data.data.hijriah,
+          masehi: data.data.masehi
+        })
+        // Ramadan starts on February 19, 2026 for 1447 H
+        setRamadanStartDate(new Date(2026, 1, 19))
+      }
+    } catch (error) {
+      console.error('Error fetching schedule:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Location Functions
+  const detectLocation = async () => {
+    console.log('📍 Starting GPS location detection...')
+    setLocating(true)
+    setLocationError(null)
+
+    if (!navigator.geolocation) {
+      console.error('❌ Geolocation not supported')
+      setLocationError('Geolocation tidak didukung browser')
+      setDefaultLocation()
+      return
+    }
+
+    console.log('✅ Geolocation supported, requesting position...')
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        console.log(`📍 GPS Position obtained: ${latitude}, ${longitude}`)
+        console.log('🔍 Starting reverse geocoding...')
+        await reverseGeocode(latitude, longitude)
+      },
+      (error) => {
+        console.error('❌ Geolocation error:', error.message, error.code)
+        setLocationError('Lokasi tidak terdeteksi, menggunakan Jakarta')
+        setDefaultLocation()
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
+  const reverseGeocode = async (lat, lon) => {
+    try {
+      console.log(`🌐 Fetching from Nominatim: lat=${lat}, lon=${lon}`)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=id-ID`
+      )
+      const data = await response.json()
+      console.log('📦 Nominatim response:', data)
+
+      if (data?.address) {
+        const { address } = data
+        let foundProvince = null
+
+        console.log('🏙️ Address fields:', address)
+
+        // Find province - check multiple fields
+        const provinceCandidates = [
+          address.state,
+          address.state_district,
+          address.region,
+          address.province,
+          address.county, // Some Indonesian regions use county for regency
+        ].filter(Boolean)
+
+        console.log('🔍 Province candidates:', provinceCandidates)
+
+        for (const candidate of provinceCandidates) {
+          foundProvince = findMatchingProvince(candidate)
+          if (foundProvince) {
+            console.log(`✅ Matched province: "${candidate}" -> "${foundProvince}"`)
+            break
+          }
+        }
+
+        if (!foundProvince) {
+          console.error('❌ Province not found, using default location')
+          setLocationError('Provinsi tidak ditemukan dalam database')
+          setDefaultLocation()
+          return
+        }
+
+        // Find city/county - check multiple fields in order
+        // Nominatim can return different field names depending on location type
+        // Priority: county (kabupaten) > city > town > municipality
+        let rawCityName = null
+        let cityType = null // 'Kab.' or 'Kota'
+
+        console.log('🔍 Checking address fields for city...')
+
+        // Use county as primary source for kabupaten
+        if (address.county) {
+          rawCityName = address.county
+          cityType = 'Kab.'
+          console.log(`✅ County found: "${rawCityName}" → Will use "${cityType} ${rawCityName}"`)
+        } else if (address.city) {
+          rawCityName = address.city
+          cityType = 'Kota'
+          console.log(`✅ City found: "${rawCityName}" → Will use "${cityType} ${rawCityName}"`)
+        } else if (address.town) {
+          rawCityName = address.town
+          console.log(`✅ Town found: "${rawCityName}" → Will determine type from matching`)
+        } else if (address.municipality) {
+          rawCityName = address.municipality
+          console.log(`✅ Municipality found: "${rawCityName}"`)
+        }
+
+        if (!rawCityName) {
+          console.warn('⚠️ No city name found in address')
+          setDefaultLocation()
+          return
+        }
+
+        // Add prefix if we know the type, otherwise let matching handle it
+        let cityNameForMatching = rawCityName
+        if (cityType) {
+          cityNameForMatching = `${cityType} ${rawCityName}`
+          console.log(`📋 Final city name for matching: "${cityNameForMatching}"`)
+        } else {
+          console.log(`📋 Using raw city name for matching: "${cityNameForMatching}"`)
+        }
+
+        // Now set location - this will load cities and match to API format
+        console.log(`🎯 Calling setLocation with: province="${foundProvince}", city="${cityNameForMatching}"`)
+        await setLocation(foundProvince, cityNameForMatching)
+      } else {
+        console.error('❌ No address data in Nominatim response')
+        setDefaultLocation()
+      }
+    } catch (error) {
+      console.error('❌ Reverse geocoding error:', error)
+      setDefaultLocation()
+    }
+  }
+
+  const findMatchingProvince = (name) => {
+    if (!name) {
+      console.log('⚠️ No province name provided')
+      return null
+    }
+
+    // Normalize input name
+    const normalizedName = name.toLowerCase()
+      .replace(/^(provinsi|prov|daerah|istimewa|khusus)\s*/i, '')
+      .replace(/\s+(daerah|istimewa|khusus)\s*/i, ' ')
+      .trim()
+
+    console.log(`🔍 Finding province match for: "${name}" (normalized: "${normalizedName}")`)
+
+    // Exact match
+    let match = provinces.find(p => {
+      const provinceName = p.toLowerCase()
+        .replace(/^(provinsi|prov|d\.i\.|d\.i\.|daerah|istimewa)\s*/i, '')
+        .trim()
+      return provinceName === normalizedName
+    })
+    if (match) {
+      console.log(`✅ Exact province match: "${match}"`)
+      return match
+    }
+
+    // Partial match
+    match = provinces.find(p => {
+      const provinceName = p.toLowerCase()
+        .replace(/^(provinsi|prov|d\.i\.|daerah|istimewa)\s*/i, '')
+        .trim()
+      return provinceName.includes(normalizedName) || normalizedName.includes(provinceName)
+    })
+    if (match) {
+      console.log(`✅ Partial province match: "${match}"`)
+    } else {
+      console.log(`❌ No province match found for: "${name}"`)
+    }
+    return match
+  }
+
+  const findMatchingCity = (name, citiesList) => {
+    if (!name) {
+      console.log('⚠️ No city name provided')
+      return null
+    }
+    if (!citiesList?.length) {
+      console.log('⚠️ No cities list provided')
+      return null
+    }
+
+    // Normalize input name - handle various formats from GPS
+    const normalizedName = name.toLowerCase()
+      .replace(/^(kabupaten|kabupaten|kab|kota|city|daerah|khusus|district|regency|municipality)\s*/i, '')
+      .replace(/\s+(kabupaten|kab|kota|city|daerah|khusus)\s*/i, ' ')
+      .trim()
+
+    console.log(`🔍 Finding city match for: "${name}" (normalized: "${normalizedName}")`)
+    console.log(`🏙️ Available cities (${citiesList.length}):`, citiesList)
+
+    // Exact match (ignoring Kota/Kab prefix from API list)
+    let match = citiesList.find(c => {
+      // API format: "Kab. Bantul", "Kota Yogyakarta"
+      const cityName = c.toLowerCase()
+        .replace(/^kab\.?\s*/i, '')
+        .replace(/^kota\s*/i, '')
+        .trim()
+      console.log(`   Comparing "${normalizedName}" with "${cityName}" (from "${c}"): ${cityName === normalizedName}`)
+      return cityName === normalizedName
+    })
+    if (match) {
+      console.log(`✅ Exact city match: "${match}"`)
+      return match
+    }
+
+    // Partial match - for cases where GPS returns slightly different names
+    console.log('⚠️ No exact match, trying partial match...')
+    match = citiesList.find(c => {
+      const cityName = c.toLowerCase()
+        .replace(/^kab\.?\s*/i, '')
+        .replace(/^kota\s*/i, '')
+        .trim()
+      const result = cityName.includes(normalizedName) || normalizedName.includes(cityName)
+      console.log(`   Partial: "${cityName}" includes "${normalizedName}": ${result}`)
+      return result
+    })
+    if (match) {
+      console.log(`✅ Partial city match: "${match}"`)
+    } else {
+      console.log(`❌ No city match found for: "${name}"`)
+      console.log(`🔍 Showing normalized comparison for debugging:`)
+      citiesList.forEach(c => {
+        const cityName = c.toLowerCase()
+          .replace(/^kab\.?\s*/i, '')
+          .replace(/^kota\s*/i, '')
+          .trim()
+        console.log(`   "${c}" → "${cityName}"`)
+      })
+    }
+    return match
+  }
+
+  const setLocation = async (province, cityName) => {
+    console.log(`🎯 Setting location: ${province} - ${cityName}`)
+    setSelectedProvince(province)
+    await fetchCities(province)
+    console.log(`📋 Loaded ${cities.length} cities for ${province}`)
+
+    // Find matching city from loaded cities
+    const matched = findMatchingCity(cityName, cities)
+    const finalCity = matched || cities[0] || DEFAULT_CITY
+    console.log(`🏙️ Final city selected: "${finalCity}"`)
+    setSelectedCity(finalCity)
+    setLocating(false)
+  }
+
+  const setDefaultLocation = async () => {
+    console.log(`🏠 Using default location: ${DEFAULT_PROVINCE} - ${DEFAULT_CITY}`)
+    if (provinces.includes(DEFAULT_PROVINCE)) {
+      setSelectedProvince(DEFAULT_PROVINCE)
+      const citiesList = await fetchCitiesForProvince(DEFAULT_PROVINCE)
+      setSelectedCity(DEFAULT_CITY)
+    }
+    setLocating(false)
+  }
+
+  const fetchCitiesForProvince = async (province) => {
+    if (!province) return []
+    try {
+      const response = await fetch(`${API_BASE}/kabkota`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provinsi: province })
+      })
+      const data = await response.json()
+      const citiesList = data.data || []
+      setCities(citiesList)
+      return citiesList
+    } catch (error) {
+      console.error('Error fetching cities:', error)
+      return []
+    }
+  }
+
+  const retryLocation = () => detectLocation()
+
+  // Event Handlers
+  const navigateDate = (days) => {
+    const newDate = new Date(currentDate)
+    newDate.setDate(newDate.getDate() + days)
+    setCurrentDate(newDate)
+  }
+
+  const goToToday = () => setCurrentDate(new Date())
+
+  // Utility Functions
+  const isToday = (date) => {
+    const today = new Date()
+    return date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+  }
+
+  const formatDateIndonesian = (date) => {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ]
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
+  }
+
+  const parseTime = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+
+  // Computed Values
+  const todaySchedule = useMemo(() => {
+    if (!schedule?.length || !ramadanStartDate) return null
+
+    const diffTime = currentDate - ramadanStartDate
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1
+
+    return schedule.find(item => item.tanggal === diffDays)
+  }, [schedule, currentDate, ramadanStartDate])
+
+  const currentMinutes = useMemo(() => {
+    return currentTime.getHours() * 60 + currentTime.getMinutes()
+  }, [currentTime])
+
+  const getNextPrayer = useMemo(() => {
+    if (!todaySchedule) return null
+
+    const prayers = [
+      { name: 'Imsak', time: todaySchedule.imsak },
+      { name: 'Subuh', time: todaySchedule.subuh },
+      { name: 'Terbit', time: todaySchedule.terbit },
+      { name: 'Dhuha', time: todaySchedule.dhuha },
+      { name: 'Zuhur', time: todaySchedule.dzuhur },
+      { name: 'Asar', time: todaySchedule.ashar },
+      { name: 'Maghrib', time: todaySchedule.maghrib },
+      { name: 'Isya', time: todaySchedule.isya }
+    ]
+
+    return prayers.find(prayer => parseTime(prayer.time) > currentMinutes) || null
+  }, [todaySchedule, currentMinutes])
+
+  const getRamadanDay = () => todaySchedule?.tanggal || null
+
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>Jadwal Imsakiyah</h1>
+        <p className="subtitle">Waktu Sholat & Imsakiyah</p>
+        {scheduleMeta && (
+          <p className="ramadan-info">Ramadan {scheduleMeta.hijriah} H</p>
+        )}
+        {selectedCity && selectedProvince && (
+          <button className="location-info-header" onClick={retryLocation} disabled={locating}>
+            {locating ? '🔄' : '📍'} {selectedCity}, {selectedProvince}
+          </button>
+        )}
+        {/* Location Detection Button */}
+
+      </header>
+
+      <div className="container">
+        {/* Locating Status */}
+        {locating && (
+          <div className="locating-status">
+            <div className="locating-spinner"></div>
+            <p>Mendeteksi lokasi Anda...</p>
+          </div>
+        )}
+
+        {/* Location Error */}
+        {locationError && !locating && (
+          <div className="location-error">
+            <p>{locationError}</p>
+            <button className="retry-btn" onClick={retryLocation}>
+              🔄 Coba Lagi
+            </button>
+          </div>
+        )}
+
+
+
+        {/* Date Navigation */}
+        {schedule?.length > 0 && (
+          <div className="date-nav">
+            <button onClick={() => navigateDate(-1)}>&larr; Sebelumnya</button>
+            <div className="date-display">
+              {isToday(currentDate) && <span className="today-badge">Hari ini</span>}
+
+              <span className="date-text">
+
+                {formatDateIndonesian(currentDate)}
+              </span>
+              {getRamadanDay() && (
+                <span className="ramadan-day">Hari ke-{getRamadanDay()}</span>
+              )}
+
+            </div>
+            <button onClick={() => navigateDate(1)}>Selanjutnya &rarr;</button>
+          </div>
+        )}
+
+        {/* Current Time Display */}
+        {todaySchedule && (
+          <div className="current-time">
+            <p className="time-label">Waktu Sekarang</p>
+            <p className="time-value">
+              {currentTime.toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              })}
+            </p>
+            {getNextPrayer && (
+              <p className="next-prayer">
+                Menuju {getNextPrayer.name}: <span>{getNextPrayer.time}</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="loading">
+            <p>Memuat jadwal...</p>
+          </div>
+        )}
+
+        {/* Prayer Times */}
+        {todaySchedule && !loading && (
+          <div className="prayer-times">
+            {[
+              { name: 'Imsak', key: 'imsak' },
+              { name: 'Subuh', key: 'subuh' },
+              { name: 'Terbit', key: 'terbit' },
+              { name: 'Dhuha', key: 'dhuha' },
+              { name: 'Zuhur', key: 'dzuhur' },
+              { name: 'Asar', key: 'ashar' },
+              { name: 'Maghrib', key: 'maghrib' },
+              { name: 'Isya', key: 'isya' }
+            ].map(({ name, key }) => (
+              <PrayerTimeRow
+                key={name}
+                name={name}
+                time={todaySchedule[key]}
+                isActive={getNextPrayer?.name === name}
+                currentMinutes={currentMinutes}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* No Schedule Message */}
+        {!loading && schedule?.length > 0 && !todaySchedule && (
+          <div className="no-schedule">
+            <p>Jadwal hanya tersedia untuk bulan Ramadan</p>
+          </div>
+        )}
+      </div>
+
+      <footer className="footer">
+        <p>Copyright <a href="https://cahyonoz.my.id" target="_blank" rel="noopener noreferrer">cahyonoz.my.id</a></p>
+      </footer>
+    </div>
+  )
+}
+
+function PrayerTimeRow({ name, time, isActive, currentMinutes }) {
+  const [hours, minutes] = time.split(':').map(Number)
+  const prayerMinutes = hours * 60 + minutes
+  const isPassed = prayerMinutes < currentMinutes
+
+  return (
+    <div className={`prayer-row ${isActive ? 'active' : ''} ${isPassed ? 'passed' : ''}`}>
+      <span className="prayer-name">{name}</span>
+      <span className="prayer-time">{time}</span>
+    </div>
+  )
+}
+
+export default App
