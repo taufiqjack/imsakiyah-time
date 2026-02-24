@@ -21,17 +21,18 @@ function App() {
   const [audioInstance, setAudioInstance] = useState(null)
   const [lastNotificationMinute, setLastNotificationMinute] = useState(null)
 
-  // Initialize dark mode from localStorage or system preference
+  // Initialize dark mode from localStorage or default to dark mode
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
 
     if (savedTheme) {
       setDarkMode(savedTheme === 'dark')
       document.documentElement.setAttribute('data-theme', savedTheme)
-    } else if (prefersDark) {
+    } else {
+      // Default to dark mode
       setDarkMode(true)
       document.documentElement.setAttribute('data-theme', 'dark')
+      localStorage.setItem('theme', 'dark')
     }
 
     // Initialize adhan enabled from localStorage
@@ -617,6 +618,36 @@ function App() {
 
   const getRamadanDay = () => todaySchedule?.tanggal || null
 
+  // Countdown to next prayer
+  const prayerCountdown = useMemo(() => {
+    if (!getNextPrayer) return null
+
+    const [prayerHours, prayerMinutes] = getNextPrayer.time.split(':').map(Number)
+    const prayerTotalSeconds = prayerHours * 3600 + prayerMinutes * 60
+
+    const currentHours = currentTime.getHours()
+    const currentMinutes = currentTime.getMinutes()
+    const currentSeconds = currentTime.getSeconds()
+    const currentTotalSeconds = currentHours * 3600 + currentMinutes * 60 + currentSeconds
+
+    const diffSeconds = prayerTotalSeconds - currentTotalSeconds
+
+    if (diffSeconds <= 0) return null
+
+    const hours = Math.floor(diffSeconds / 3600)
+    const minutes = Math.floor((diffSeconds % 3600) / 60)
+    const seconds = diffSeconds % 60
+
+    return { hours, minutes, seconds }
+  }, [getNextPrayer, currentTime])
+
+  const formatCountdown = (countdown) => {
+    if (!countdown) return '--:--:--'
+
+    const { hours, minutes, seconds } = countdown
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+
   return (
     <div className="app">
       {/* Theme Toggle Button */}
@@ -708,9 +739,11 @@ function App() {
               })}
             </p>
             {getNextPrayer && (
-              <p className="next-prayer">
-                Menuju {getNextPrayer.name}: <span>{getNextPrayer.time}</span>
-              </p>
+              <>
+                <p className="next-prayer">
+                  Menuju {getNextPrayer.name}: <span>{formatCountdown(prayerCountdown)}</span>
+                </p>
+              </>
             )}
           </div>
         )}
@@ -758,7 +791,7 @@ function App() {
       </div>
 
       <footer className="footer">
-        <p>Copyright <a href="https://cahyonoz.my.id" target="_blank" rel="noopener noreferrer">cahyonoz.my.id</a></p>
+        <p>Copyright <a href="https://cahyonoz.my.id" target="_blank" rel="noopener noreferrer">cahyonozdev</a></p>
       </footer>
     </div>
   )
