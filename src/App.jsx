@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import './App.css'
 
 const API_BASE = 'https://equran.id/api/v2/imsakiyah'
+const QURAN_API = 'https://equran.id/api/v2/surat'
 
 function App() {
   const [provinces, setProvinces] = useState([])
@@ -20,6 +21,20 @@ function App() {
   const [adhanEnabled, setAdhanEnabled] = useState(true)
   const [audioInstance, setAudioInstance] = useState(null)
   const [lastNotificationMinute, setLastNotificationMinute] = useState(null)
+
+  // Quran feature state
+  const [activeTab, setActiveTab] = useState('schedule')
+  const [surahList, setSurahList] = useState([])
+  const [surahLoading, setSurahLoading] = useState(false)
+  const [selectedSurah, setSelectedSurah] = useState(null)
+  const [surahDetail, setSurahDetail] = useState(null)
+  const [surahDetailLoading, setSurahDetailLoading] = useState(false)
+  const [playingAyah, setPlayingAyah] = useState(null)
+  const [ayahAudioInstance, setAyahAudioInstance] = useState(null)
+  const [isPlayingFullSurah, setIsPlayingFullSurah] = useState(false)
+  const [fullSurahAudioInstance, setFullSurahAudioInstance] = useState(null)
+  const [selectedQari, setSelectedQari] = useState('01') // Default qari
+  const [surahSearchQuery, setSurahSearchQuery] = useState('')
 
   // Initialize dark mode from localStorage or default to dark mode
   useEffect(() => {
@@ -304,6 +319,162 @@ function App() {
       setLoading(false)
     }
   }
+
+  const fetchSurahList = async () => {
+    if (surahList.length > 0) return // Already loaded
+
+    setSurahLoading(true)
+    try {
+      const response = await fetch(QURAN_API)
+      const data = await response.json()
+      if (data.data) {
+        setSurahList(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching surah list:', error)
+    } finally {
+      setSurahLoading(false)
+    }
+  }
+
+  const fetchSurahDetail = async (surahId) => {
+    setSurahDetailLoading(true)
+    setSurahDetail(null)
+    try {
+      const response = await fetch(`${QURAN_API}/${surahId}`)
+      const data = await response.json()
+      if (data.data) {
+        setSurahDetail(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching surah detail:', error)
+    } finally {
+      setSurahDetailLoading(false)
+    }
+  }
+
+  const handleSurahClick = (surah) => {
+    setSelectedSurah(surah)
+    fetchSurahDetail(surah.nomor)
+  }
+
+  const handleBackToList = () => {
+    // Stop any playing ayah audio
+    if (ayahAudioInstance) {
+      ayahAudioInstance.pause()
+      setAyahAudioInstance(null)
+      setPlayingAyah(null)
+    }
+    // Stop full surah audio
+    if (fullSurahAudioInstance) {
+      fullSurahAudioInstance.pause()
+      setFullSurahAudioInstance(null)
+      setIsPlayingFullSurah(false)
+    }
+    setSelectedSurah(null)
+    setSurahDetail(null)
+  }
+
+  const toggleFullSurahAudio = () => {
+    // If already playing, stop it
+    if (isPlayingFullSurah && fullSurahAudioInstance) {
+      fullSurahAudioInstance.pause()
+      setFullSurahAudioInstance(null)
+      setIsPlayingFullSurah(false)
+      return
+    }
+
+    // Stop any currently playing ayah audio
+    if (ayahAudioInstance) {
+      ayahAudioInstance.pause()
+      setAyahAudioInstance(null)
+      setPlayingAyah(null)
+    }
+
+    // Stop any previously playing full surah audio
+    if (fullSurahAudioInstance) {
+      fullSurahAudioInstance.pause()
+      setFullSurahAudioInstance(null)
+    }
+
+    // Play full surah audio
+    if (surahDetail?.audioFull && surahDetail.audioFull[selectedQari]) {
+      const audio = new Audio(surahDetail.audioFull[selectedQari])
+      setIsPlayingFullSurah(true)
+
+      audio.addEventListener('ended', () => {
+        setFullSurahAudioInstance(null)
+        setIsPlayingFullSurah(false)
+      })
+
+      audio.addEventListener('error', (e) => {
+        console.error('Error playing full surah audio:', e)
+        setFullSurahAudioInstance(null)
+        setIsPlayingFullSurah(false)
+      })
+
+      setFullSurahAudioInstance(audio)
+      audio.play().catch(err => {
+        console.error('Failed to play full surah audio:', err)
+        setFullSurahAudioInstance(null)
+        setIsPlayingFullSurah(false)
+      })
+    }
+  }
+
+  const toggleAyahAudio = (ayah) => {
+    // If clicking on the currently playing ayah, stop it
+    if (playingAyah === ayah.nomorAyat && ayahAudioInstance) {
+      ayahAudioInstance.pause()
+      setAyahAudioInstance(null)
+      setPlayingAyah(null)
+      return
+    }
+
+    // Stop any currently playing audio first
+    if (ayahAudioInstance) {
+      ayahAudioInstance.pause()
+      setAyahAudioInstance(null)
+    }
+
+    // Stop full surah audio if playing
+    if (isPlayingFullSurah && fullSurahAudioInstance) {
+      fullSurahAudioInstance.pause()
+      setFullSurahAudioInstance(null)
+      setIsPlayingFullSurah(false)
+    }
+
+    // Play the new ayah using selected qari
+    if (ayah.audio && ayah.audio[selectedQari]) {
+      const audio = new Audio(ayah.audio[selectedQari])
+      setPlayingAyah(ayah.nomorAyat)
+
+      audio.addEventListener('ended', () => {
+        setAyahAudioInstance(null)
+        setPlayingAyah(null)
+      })
+
+      audio.addEventListener('error', (e) => {
+        console.error('Error playing ayah audio:', e)
+        setAyahAudioInstance(null)
+        setPlayingAyah(null)
+      })
+
+      setAyahAudioInstance(audio)
+      audio.play().catch(err => {
+        console.error('Failed to play ayah audio:', err)
+        setAyahAudioInstance(null)
+        setPlayingAyah(null)
+      })
+    }
+  }
+
+  // Fetch surah list when Quran tab is active
+  useEffect(() => {
+    if (activeTab === 'quran') {
+      fetchSurahList()
+    }
+  }, [activeTab])
 
   // Location Functions
   const detectLocation = async () => {
@@ -672,10 +843,10 @@ function App() {
       <header className="header">
         <h1>Jadwal Imsakiyah</h1>
         <p className="subtitle">Waktu Sholat & Imsakiyah</p>
-        {scheduleMeta && (
+        {scheduleMeta && activeTab === 'schedule' && (
           <p className="ramadan-info">Ramadan {scheduleMeta.hijriah} H</p>
         )}
-        {selectedCity && selectedProvince && (
+        {selectedCity && selectedProvince && activeTab === 'schedule' && (
           <div className="location-wrapper">
             <button className="location-info-header" onClick={retryLocation} disabled={locating}>
               {locating ? '🔄' : '📍'} {selectedCity}, {selectedProvince}
@@ -686,107 +857,306 @@ function App() {
 
       </header>
 
+      {/* Tab Navigation */}
+      <div className="tab-navigation">
+        <button
+          className={`tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedule')}
+        >
+          🕌 Jadwal Sholat
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'quran' ? 'active' : ''}`}
+          onClick={() => setActiveTab('quran')}
+        >
+          📖 Al Qur'an
+        </button>
+      </div>
+
       <div className="container">
-        {/* Locating Status */}
-        {locating && (
-          <div className="locating-status">
-            <div className="locating-spinner"></div>
-            <p>Mendeteksi lokasi Anda...</p>
-          </div>
-        )}
+        {/* Schedule Tab Content */}
+        {activeTab === 'schedule' && (
+          <>
+            {/* Locating Status */}
+            {locating && (
+              <div className="locating-status">
+                <div className="locating-spinner"></div>
+                <p>Mendeteksi lokasi Anda...</p>
+              </div>
+            )}
 
-        {/* Location Error */}
-        {locationError && !locating && (
-          <div className="location-error">
-            <p>{locationError}</p>
-            <button className="retry-btn" onClick={retryLocation}>
-              🔄 Coba Lagi
-            </button>
-          </div>
-        )}
+            {/* Location Error */}
+            {locationError && !locating && (
+              <div className="location-error">
+                <p>{locationError}</p>
+                <button className="retry-btn" onClick={retryLocation}>
+                  🔄 Coba Lagi
+                </button>
+              </div>
+            )}
 
 
 
-        {/* Date Navigation */}
-        {schedule?.length > 0 && (
-          <div className="date-nav">
-            <button onClick={() => navigateDate(-1)}>&larr; Sebelumnya</button>
-            <div className="date-display">
-              {isToday(currentDate) && <span className="today-badge">Hari ini</span>}
+            {/* Date Navigation */}
+            {schedule?.length > 0 && (
+              <div className="date-nav">
+                <button onClick={() => navigateDate(-1)}>&larr; Sebelumnya</button>
+                <div className="date-display">
+                  {isToday(currentDate) && <span className="today-badge">Hari ini</span>}
 
-              <span className="date-text">
+                  <span className="date-text">
 
-                {formatDateIndonesian(currentDate)}
-              </span>
-              {getRamadanDay() && (
-                <span className="ramadan-day">Hari ke-{getRamadanDay()}</span>
-              )}
+                    {formatDateIndonesian(currentDate)}
+                  </span>
+                  {getRamadanDay() && (
+                    <span className="ramadan-day">Hari ke-{getRamadanDay()}</span>
+                  )}
 
-            </div>
-            <button onClick={() => navigateDate(1)}>Selanjutnya &rarr;</button>
-          </div>
-        )}
+                </div>
+                <button onClick={() => navigateDate(1)}>Selanjutnya &rarr;</button>
+              </div>
+            )}
 
-        {/* Current Time Display */}
-        {todaySchedule && (
-          <div className="current-time">
-            <p className="time-label">Waktu Sekarang</p>
-            <p className="time-value">
-              {currentTime.toLocaleTimeString('id-ID', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-              })}
-            </p>
-            {getNextPrayer && (
-              <>
-                <p className="next-prayer">
-                  Menuju {getNextPrayer.name}: <span>{formatCountdown(prayerCountdown)}</span>
+            {/* Current Time Display */}
+            {todaySchedule && (
+              <div className="current-time">
+                <p className="time-label">Waktu Sekarang</p>
+                <p className="time-value">
+                  {currentTime.toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                  })}
                 </p>
+                {getNextPrayer && (
+                  <>
+                    <p className="next-prayer">
+                      Menuju {getNextPrayer.name}: <span>{formatCountdown(prayerCountdown)}</span>
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Loading State */}
+            {loading && (
+              <div className="loading">
+                <p>Memuat jadwal...</p>
+              </div>
+            )}
+
+            {/* Prayer Times */}
+            {todaySchedule && !loading && (
+              <div className="prayer-times">
+                {[
+                  { name: 'Imsak', key: 'imsak' },
+                  { name: 'Subuh', key: 'subuh' },
+                  { name: 'Terbit', key: 'terbit' },
+                  { name: 'Dhuha', key: 'dhuha' },
+                  { name: 'Zuhur', key: 'dzuhur' },
+                  { name: 'Asar', key: 'ashar' },
+                  { name: 'Maghrib', key: 'maghrib' },
+                  { name: 'Isya', key: 'isya' }
+                ].map(({ name, key }) => (
+                  <PrayerTimeRow
+                    key={name}
+                    name={name}
+                    time={todaySchedule[key]}
+                    isActive={getNextPrayer?.name === name}
+                    currentMinutes={currentMinutes}
+                    hasAdhan={['Subuh', 'Zuhur', 'Asar', 'Maghrib', 'Isya'].includes(name) && adhanEnabled}
+                    isPlaying={playingAdhan === name}
+                    onToggleAdhan={() => toggleAdhan(name)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* No Schedule Message */}
+            {!loading && schedule?.length > 0 && !todaySchedule && (
+              <div className="no-schedule">
+                <p>Jadwal hanya tersedia untuk bulan Ramadan</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Quran Tab Content */}
+        {activeTab === 'quran' && (
+          <>
+            {/* Surah List View */}
+            {!selectedSurah && (
+              <>
+                <div className="quran-header">
+                  <h2>📖 Daftar Surat Al Qur'an</h2>
+                  <p className="quran-subtitle">114 Surat dalam Al Qur'an</p>
+                </div>
+
+                {/* Search Input */}
+                <div className="surah-search-container">
+                  <input
+                    type="text"
+                    className="surah-search-input"
+                    placeholder="🔍 Cari surah berdasarkan nama, arti, atau..."
+                    value={surahSearchQuery}
+                    onChange={(e) => setSurahSearchQuery(e.target.value)}
+                  />
+                  {surahSearchQuery && (
+                    <button
+                      className="search-clear-btn"
+                      onClick={() => setSurahSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {surahLoading && (
+                  <div className="loading">
+                    <p>Memuat daftar surat...</p>
+                  </div>
+                )}
+
+                {!surahLoading && surahList.length > 0 && (
+                  <div className="surah-list">
+                    {surahList
+                      .filter((surah) => {
+                        const query = surahSearchQuery.toLowerCase()
+                        const searchName = surah.namaLatin.toLowerCase()
+                        const searchArti = surah.arti.toLowerCase()
+                        const arabicName = surah.nama.toLowerCase()
+                        return searchName.includes(query) || searchArti.includes(query) || arabicName.includes(query)
+                      })
+                      .map((surah) => (
+                      <div key={surah.nomor} className="surah-card" onClick={() => handleSurahClick(surah)}>
+                        <div className="surah-number">{surah.nomor}</div>
+                        <div className="surah-info">
+                          <div className="surah-name-row">
+                            <span className="surah-name-latin">{surah.namaLatin}</span>
+                            <span className="surah-name-arabic">{surah.nama}</span>
+                          </div>
+                          <div className="surah-meta">
+                            <span className="surah-translation">{surah.arti}</span>
+                            <span className="surah-verse-count">{surah.jumlahAyat} Ayat</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!surahLoading && surahList.filter((surah) => {
+                  const query = surahSearchQuery.toLowerCase()
+                  const searchName = surah.namaLatin.toLowerCase()
+                  const searchArti = surah.arti.toLowerCase()
+                  const arabicName = surah.nama.toLowerCase()
+                  return searchName.includes(query) || searchArti.includes(query) || arabicName.includes(query)
+                }).length === 0 && surahSearchQuery && (
+                  <div className="no-results">
+                    <p>Tidak ada surat yang cocok dengan pencarian "{surahSearchQuery}"</p>
+                  </div>
+                )}
               </>
             )}
-          </div>
-        )}
 
-        {/* Loading State */}
-        {loading && (
-          <div className="loading">
-            <p>Memuat jadwal...</p>
-          </div>
-        )}
+            {/* Surah Detail View */}
+            {selectedSurah && (
+              <>
+                <div className="surah-detail-header">
+                  <button className="back-btn" onClick={handleBackToList}>
+                    ← Kembali
+                  </button>
+                  <div className="surah-detail-info">
+                    <div className="surah-detail-title-row">
+                      <span className="surah-detail-number">{selectedSurah.nomor}</span>
+                      <div className="surah-detail-names">
+                        <span className="surah-detail-latin">{selectedSurah.namaLatin}</span>
+                        <span className="surah-detail-arabic">{selectedSurah.nama}</span>
+                      </div>
+                    </div>
+                    <div className="surah-detail-meta">
+                      <span>{selectedSurah.arti}</span>
+                      <span>•</span>
+                      <span>{selectedSurah.jumlahAyat} Ayat</span>
+                      <span>•</span>
+                      <span>{selectedSurah.tempatTurun}</span>
+                    </div>
+                  </div>
+                  {/* Full Surah Audio Controls */}
+                  {surahDetail?.audioFull && (
+                    <div className="full-audio-controls">
+                      <div className="qari-selector">
+                        <label>Pilih Qari:</label>
+                        <select
+                          value={selectedQari}
+                          onChange={(e) => {
+                            setSelectedQari(e.target.value)
+                            // Stop current audio if playing when changing qari
+                            if (isPlayingFullSurah && fullSurahAudioInstance) {
+                              fullSurahAudioInstance.pause()
+                              setFullSurahAudioInstance(null)
+                              setIsPlayingFullSurah(false)
+                            }
+                          }}
+                        >
+                          <option value="01">Abdullah Al-Juhany</option>
+                          <option value="02">Abdul Muhsin Al-Qasim</option>
+                          <option value="03">Abdurrahman as-Sudais</option>
+                          <option value="04">Ibrahim Al-Dossari</option>
+                          <option value="05">Misyari Rashid Al-Afasy</option>
+                        </select>
+                      </div>
+                      <button
+                        className={`full-audio-btn ${isPlayingFullSurah ? 'playing' : ''}`}
+                        onClick={toggleFullSurahAudio}
+                        title={isPlayingFullSurah ? 'Pause surat' : 'Putar surat penuh'}
+                      >
+                        {isPlayingFullSurah ? '⏸️ Pause Surat' : '▶️ Putar Surat Penuh'}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-        {/* Prayer Times */}
-        {todaySchedule && !loading && (
-          <div className="prayer-times">
-            {[
-              { name: 'Imsak', key: 'imsak' },
-              { name: 'Subuh', key: 'subuh' },
-              { name: 'Terbit', key: 'terbit' },
-              { name: 'Dhuha', key: 'dhuha' },
-              { name: 'Zuhur', key: 'dzuhur' },
-              { name: 'Asar', key: 'ashar' },
-              { name: 'Maghrib', key: 'maghrib' },
-              { name: 'Isya', key: 'isya' }
-            ].map(({ name, key }) => (
-              <PrayerTimeRow
-                key={name}
-                name={name}
-                time={todaySchedule[key]}
-                isActive={getNextPrayer?.name === name}
-                currentMinutes={currentMinutes}
-                hasAdhan={['Subuh', 'Zuhur', 'Asar', 'Maghrib', 'Isya'].includes(name) && adhanEnabled}
-                isPlaying={playingAdhan === name}
-                onToggleAdhan={() => toggleAdhan(name)}
-              />
-            ))}
-          </div>
-        )}
+                {surahDetailLoading && (
+                  <div className="loading">
+                    <p>Memuat ayat...</p>
+                  </div>
+                )}
 
-        {/* No Schedule Message */}
-        {!loading && schedule?.length > 0 && !todaySchedule && (
-          <div className="no-schedule">
-            <p>Jadwal hanya tersedia untuk bulan Ramadan</p>
-          </div>
+                {!surahDetailLoading && surahDetail && (
+                  <div className="ayah-list">
+                    {/* Bismillah */}
+                    {surahDetail.nomor !== 1 && surahDetail.nomor !== 9 && (
+                      <div className="bismillah">
+                        <span className="bismillah-arabic">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</span>
+                        <span className="bismillah-translation">Dengan nama Allah Yang Maha Pengasih, Maha Penyayang</span>
+                      </div>
+                    )}
+                    {surahDetail.ayat && surahDetail.ayat.map((ayah) => (
+                      <div key={ayah.nomorAyat} className={`ayah-card ${playingAyah === ayah.nomorAyat ? 'playing' : ''}`}>
+                        <div className="ayah-header">
+                          <span className="ayah-number">{ayah.nomorAyat}</span>
+                          {ayah.audio && ayah.audio[selectedQari] && (
+                            <button
+                              className="ayah-audio-btn"
+                              onClick={() => toggleAyahAudio(ayah)}
+                              title={playingAyah === ayah.nomorAyat ? 'Pause ayat' : 'Putar ayat'}
+                            >
+                              {playingAyah === ayah.nomorAyat ? '⏸️' : '▶️'}
+                            </button>
+                          )}
+                        </div>
+                        <p className="ayah-arabic">{ayah.teksArab}</p>
+                        <p className="ayah-latin">{ayah.teksLatin}</p>
+                        <p className="ayah-translation">{ayah.teksIndonesia}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
       </div>
 
