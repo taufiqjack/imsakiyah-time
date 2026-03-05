@@ -35,6 +35,9 @@ function App() {
   const [fullSurahAudioInstance, setFullSurahAudioInstance] = useState(null)
   const [selectedQari, setSelectedQari] = useState('01') // Default qari
   const [surahSearchQuery, setSurahSearchQuery] = useState('')
+  const [lastReadSurah, setLastReadSurah] = useState(null)
+  const [lastReadAyah, setLastReadAyah] = useState(null)
+  const [saveReadEnabled, setSaveReadEnabled] = useState(true)
 
   // Initialize dark mode from localStorage or default to dark mode
   useEffect(() => {
@@ -54,6 +57,31 @@ function App() {
     const savedAdhanEnabled = localStorage.getItem('adhanEnabled')
     if (savedAdhanEnabled !== null) {
       setAdhanEnabled(savedAdhanEnabled === 'true')
+    }
+
+    // Initialize last read surah and ayah from localStorage
+    const savedLastReadSurah = localStorage.getItem('lastReadSurah')
+    if (savedLastReadSurah) {
+      try {
+        setLastReadSurah(JSON.parse(savedLastReadSurah))
+      } catch (e) {
+        console.error('Error parsing lastReadSurah from localStorage:', e)
+      }
+    }
+
+    const savedLastReadAyah = localStorage.getItem('lastReadAyah')
+    if (savedLastReadAyah) {
+      try {
+        setLastReadAyah(JSON.parse(savedLastReadAyah))
+      } catch (e) {
+        console.error('Error parsing lastReadAyah from localStorage:', e)
+      }
+    }
+
+    // Initialize save read enabled from localStorage
+    const savedSaveReadEnabled = localStorage.getItem('saveReadEnabled')
+    if (savedSaveReadEnabled !== null) {
+      setSaveReadEnabled(savedSaveReadEnabled === 'true')
     }
 
     // Request notification permission on app load
@@ -90,6 +118,21 @@ function App() {
       audioInstance.pause()
       setAudioInstance(null)
       setPlayingAdhan(null)
+    }
+  }
+
+  // Toggle save read enabled/disabled
+  const toggleSaveReadEnabled = () => {
+    const newValue = !saveReadEnabled
+    setSaveReadEnabled(newValue)
+    localStorage.setItem('saveReadEnabled', String(newValue))
+
+    // Clear saved data when disabling
+    if (!newValue) {
+      localStorage.removeItem('lastReadSurah')
+      localStorage.removeItem('lastReadAyah')
+      setLastReadSurah(null)
+      setLastReadAyah(null)
     }
   }
 
@@ -356,6 +399,39 @@ function App() {
   const handleSurahClick = (surah) => {
     setSelectedSurah(surah)
     fetchSurahDetail(surah.nomor)
+    // Save to localStorage for "Continue Reading" feature only if enabled
+    if (saveReadEnabled) {
+      const lastReadData = {
+        nomor: surah.nomor,
+        namaLatin: surah.namaLatin,
+        nama: surah.nama,
+        arti: surah.arti,
+        timestamp: Date.now()
+      }
+      localStorage.setItem('lastReadSurah', JSON.stringify(lastReadData))
+      setLastReadSurah(lastReadData)
+    }
+  }
+
+  const handleSaveAyah = (ayah) => {
+    const isCurrentlySaved = lastReadAyah?.nomorAyat === ayah.nomorAyat && lastReadAyah?.surahNomor === selectedSurah?.nomor
+
+    if (isCurrentlySaved) {
+      // Unmark: remove the saved ayah
+      localStorage.removeItem('lastReadAyah')
+      setLastReadAyah(null)
+    } else {
+      // Mark: save the ayah
+      const ayahData = {
+        surahNomor: selectedSurah?.nomor,
+        nomorAyat: ayah.nomorAyat,
+        teksArab: ayah.teksArab,
+        teksLatin: ayah.teksLatin,
+        timestamp: Date.now()
+      }
+      localStorage.setItem('lastReadAyah', JSON.stringify(ayahData))
+      setLastReadAyah(ayahData)
+    }
   }
 
   const handleBackToList = () => {
@@ -830,12 +906,24 @@ function App() {
         {darkMode ? '☀️' : '🌙'}
       </button>
 
+      {/* Save Read Toggle Button - Only show in Quran tab */}
+      <button
+        className={`save-read-toggle ${saveReadEnabled ? 'enabled' : ''}`}
+        onClick={toggleSaveReadEnabled}
+        aria-label="Toggle save read"
+        title={saveReadEnabled ? 'Simpan bacaan dinyalakan' : 'Simpan bacaan dimatikan'}
+        style={{ display: activeTab === 'quran' ? 'flex' : 'none' }}
+      >
+        {saveReadEnabled ? '🔖' : '📄'}
+      </button>
+
       {/* Adhan Master Toggle Button */}
       <button
         className={`adhan-master-toggle ${adhanEnabled ? 'enabled' : ''}`}
         onClick={toggleAdhanEnabled}
         aria-label="Toggle adhan"
         title={adhanEnabled ? 'Adzan dinyalakan' : 'Adzan dimatikan'}
+        style={{ display: activeTab === 'schedule' ? 'flex' : 'none' }}
       >
         {adhanEnabled ? '🔔' : '🔕'}
       </button>
@@ -1012,6 +1100,23 @@ function App() {
                   )}
                 </div>
 
+                {/* Continue Reading Card */}
+                {saveReadEnabled && lastReadSurah && !surahSearchQuery && (
+                  <div className="continue-reading-card" onClick={() => {
+                    const surah = surahList.find(s => s.nomor === lastReadSurah.nomor)
+                    if (surah) handleSurahClick(surah)
+                  }}>
+                    <div className="continue-reading-label">📖 Lanjutkan Membaca</div>
+                    <div className="continue-reading-info">
+                      <span className="continue-reading-number">{lastReadSurah.nomor}</span>
+                      <div className="continue-reading-details">
+                        <span className="continue-reading-name">{lastReadSurah.namaLatin} {lastReadAyah ? `- Ayat ${lastReadAyah.nomorAyat}` : ''}</span>
+                        <span className="continue-reading-arabic">{lastReadSurah.nama}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {surahLoading && (
                   <div className="loading">
                     <p>Memuat daftar surat...</p>
@@ -1137,15 +1242,26 @@ function App() {
                       <div key={ayah.nomorAyat} className={`ayah-card ${playingAyah === ayah.nomorAyat ? 'playing' : ''}`}>
                         <div className="ayah-header">
                           <span className="ayah-number">{ayah.nomorAyat}</span>
-                          {ayah.audio && ayah.audio[selectedQari] && (
-                            <button
-                              className="ayah-audio-btn"
-                              onClick={() => toggleAyahAudio(ayah)}
-                              title={playingAyah === ayah.nomorAyat ? 'Pause ayat' : 'Putar ayat'}
-                            >
-                              {playingAyah === ayah.nomorAyat ? '⏸️' : '▶️'}
-                            </button>
-                          )}
+                          <div className="ayah-actions">
+                            {saveReadEnabled && (
+                              <button
+                                className={`ayah-save-btn ${lastReadAyah?.nomorAyat === ayah.nomorAyat && lastReadAyah?.surahNomor === selectedSurah?.nomor ? 'saved' : ''}`}
+                                onClick={() => handleSaveAyah(ayah)}
+                                title="Simpan ayat ini"
+                              >
+                                🔖
+                              </button>
+                            )}
+                            {ayah.audio && ayah.audio[selectedQari] && (
+                              <button
+                                className="ayah-audio-btn"
+                                onClick={() => toggleAyahAudio(ayah)}
+                                title={playingAyah === ayah.nomorAyat ? 'Pause ayat' : 'Putar ayat'}
+                              >
+                                {playingAyah === ayah.nomorAyat ? '⏸️' : '▶️'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <p className="ayah-arabic">{ayah.teksArab}</p>
                         <p className="ayah-latin">{ayah.teksLatin}</p>
