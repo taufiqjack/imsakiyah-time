@@ -1,9 +1,4 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+/* Minimal reset - MUI CssBaseline handles the rest */
 body {
   margin: 0;
   min-width: 320px;
