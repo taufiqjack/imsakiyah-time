@@ -10,11 +10,12 @@ import {
   DarkMode, LightMode, Notifications, NotificationsOff,
   ArrowBack, PlayArrow, Stop, BookmarkBorder, Bookmark,
   Search, Close, NavigateBefore, NavigateNext, MyLocation,
-  VolumeUp, VolumeOff, MenuBook,
+  VolumeUp, VolumeOff, MenuBook, AutoStories,
 } from '@mui/icons-material'
 
 const API_BASE = 'https://equran.id/api/v2/shalat'
 const QURAN_API = 'https://equran.id/api/v2/surat'
+const HADITH_API = 'https://api.hadith.gading.dev/books'
 
 function App({ mode, toggleTheme }) {
   const theme = useTheme()
@@ -53,6 +54,14 @@ function App({ mode, toggleTheme }) {
   const [lastReadSurah, setLastReadSurah] = useState(null)
   const [lastReadAyah, setLastReadAyah] = useState(null)
   const [saveReadEnabled, setSaveReadEnabled] = useState(true)
+
+  // Hadith state
+  const [hadithBooks, setHadithBooks] = useState([])
+  const [hadithBookLoading, setHadithBookLoading] = useState(false)
+  const [selectedBook, setSelectedBook] = useState(null)
+  const [hadiths, setHadiths] = useState([])
+  const [hadithLoading, setHadithLoading] = useState(false)
+  const [hadithSearchQuery, setHadithSearchQuery] = useState('')
 
   // Init from localStorage
   useEffect(() => {
@@ -158,6 +167,11 @@ function App({ mode, toggleTheme }) {
     if (activeTab === 1) fetchSurahList()
   }, [activeTab])
 
+  // Fetch hadith books when hadith tab active
+  useEffect(() => {
+    if (activeTab === 2) fetchHadithBooks()
+  }, [activeTab])
+
   // === API Functions ===
   const fetchSchedule = useCallback(async () => {
     if (!selectedProvince || !selectedCity) return
@@ -232,6 +246,34 @@ function App({ mode, toggleTheme }) {
       console.error('Error fetching surah detail:', e)
     } finally {
       setSurahDetailLoading(false)
+    }
+  }
+
+  const fetchHadithBooks = async () => {
+    if (hadithBooks.length > 0) return
+    setHadithBookLoading(true)
+    try {
+      const res = await fetch(HADITH_API)
+      const data = await res.json()
+      if (data.data) setHadithBooks(data.data)
+    } catch (e) {
+      console.error('Error fetching hadith books:', e)
+    } finally {
+      setHadithBookLoading(false)
+    }
+  }
+
+  const fetchHadithDetail = async (bookId) => {
+    setHadithLoading(true)
+    setHadiths([])
+    try {
+      const res = await fetch(`${HADITH_API}/${bookId}?range=1-100`)
+      const data = await res.json()
+      if (data.data && data.data.hadiths) setHadiths(data.data.hadiths)
+    } catch (e) {
+      console.error('Error fetching hadith detail:', e)
+    } finally {
+      setHadithLoading(false)
     }
   }
 
@@ -434,6 +476,16 @@ function App({ mode, toggleTheme }) {
     setSurahDetail(null)
   }
 
+  const handleBookClick = (book) => {
+    setSelectedBook(book)
+    fetchHadithDetail(book.id)
+  }
+
+  const handleBackToBookList = () => {
+    setSelectedBook(null)
+    setHadiths([])
+  }
+
   const toggleFullSurahAudio = () => {
     if (isPlayingFullSurah && fullSurahAudioInstance) {
       fullSurahAudioInstance.pause()
@@ -550,6 +602,12 @@ function App({ mode, toggleTheme }) {
     )
   }, [surahList, surahSearchQuery])
 
+  const filteredHadithBooks = useMemo(() => {
+    if (!hadithSearchQuery) return hadithBooks
+    const q = hadithSearchQuery.toLowerCase()
+    return hadithBooks.filter((b) => b.name.toLowerCase().includes(q))
+  }, [hadithBooks, hadithSearchQuery])
+
   // === RENDER ===
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 3 }}>
@@ -604,8 +662,9 @@ function App({ mode, toggleTheme }) {
             onChange={(_, v) => setActiveTab(v)}
             variant="fullWidth"
           >
-            <Tab icon={<span style={{ fontSize: '1rem' }}>&#x1F54A;</span>} label="Jadwal Sholat" iconPosition="start" />
+            <Tab icon={<span style={{ fontSize: '1rem' }}>&#x1F54A;</span>} label="Jadwal" iconPosition="start" />
             <Tab icon={<MenuBook />} label="Al Qur'an" iconPosition="start" />
+            <Tab icon={<AutoStories />} label="Hadits" iconPosition="start" />
           </Tabs>
         </Paper>
 
@@ -920,6 +979,117 @@ function App({ mode, toggleTheme }) {
                           </Paper>
                           <Typography variant="body2" color="text.secondary">
                             {ayah.teksIndonesia}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Hadith Tab */}
+        {activeTab === 2 && (
+          <>
+            {!selectedBook ? (
+              <>
+                <Paper sx={{ p: 2, mb: 2, textAlign: 'center', bgcolor: 'secondary.main', color: 'white' }}>
+                  <Typography variant="h5">Kumpulan Hadits</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>Kitab-kitab Hadits Utama</Typography>
+                </Paper>
+
+                <Box sx={{ mb: 2, position: 'relative' }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Cari kitab..."
+                    value={hadithSearchQuery}
+                    onChange={(e) => setHadithSearchQuery(e.target.value)}
+                    InputProps={{
+                      startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
+                      endAdornment: hadithSearchQuery && (
+                        <IconButton size="small" onClick={() => setHadithSearchQuery('')}>
+                          <Close fontSize="small" />
+                        </IconButton>
+                      ),
+                    }}
+                  />
+                </Box>
+
+                {hadithBookLoading && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <CircularProgress />
+                    <Typography sx={{ mt: 1 }}>Memuat daftar kitab...</Typography>
+                  </Box>
+                )}
+
+                {!hadithBookLoading && filteredHadithBooks.length > 0 && (
+                  <Stack spacing={1}>
+                    {filteredHadithBooks.map((book) => (
+                      <Card
+                        key={book.id}
+                        sx={{ cursor: 'pointer', '&:hover': { transform: 'translateX(4px)', boxShadow: 2 } }}
+                        onClick={() => handleBookClick(book)}
+                      >
+                        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="body1" fontWeight={600}>{book.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{book.available} Hadits tersedia</Typography>
+                          </Box>
+                          <NavigateNext color="action" />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Stack>
+                )}
+              </>
+            ) : (
+              <>
+                <Paper
+                  sx={{
+                    p: 2, mb: 2, color: 'white',
+                    background: theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, #1b5e20 0%, #33691e 100%)'
+                      : 'linear-gradient(135deg, #2e7d32 0%, #558b2f 100%)',
+                  }}
+                >
+                  <Button startIcon={<ArrowBack />} onClick={handleBackToBookList} sx={{ color: 'white', mb: 1 }}>
+                    Kembali
+                  </Button>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{selectedBook.name}</Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.9 }}>Menampilkan 100 hadits pertama</Typography>
+                  </Box>
+                </Paper>
+
+                {hadithLoading && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <CircularProgress />
+                    <Typography sx={{ mt: 1 }}>Memuat hadits...</Typography>
+                  </Box>
+                )}
+
+                {!hadithLoading && hadiths.length > 0 && (
+                  <Stack spacing={1.5}>
+                    {hadiths.map((hadith) => (
+                      <Card key={hadith.number}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                            <Chip label={`Hadits #${hadith.number}`} color="success" size="small" variant="outlined" />
+                          </Box>
+                          <Typography
+                            sx={{
+                              fontFamily: "'Amiri', serif", fontSize: '1.4rem', lineHeight: 2,
+                              textAlign: 'right', direction: 'rtl', mb: 2,
+                            }}
+                          >
+                            {hadith.arab}
+                          </Typography>
+                          <Divider sx={{ my: 1.5, opacity: 0.5 }} />
+                          <Typography variant="body2" sx={{ color: 'text.primary', lineHeight: 1.6 }}>
+                            {hadith.id}
                           </Typography>
                         </CardContent>
                       </Card>
