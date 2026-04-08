@@ -10,7 +10,7 @@ import {
   DarkMode, LightMode, Notifications, NotificationsOff,
   ArrowBack, PlayArrow, Stop, BookmarkBorder, Bookmark,
   Search, Close, NavigateBefore, NavigateNext, MyLocation,
-  VolumeUp, VolumeOff, MenuBook, AutoStories,
+  VolumeUp, VolumeOff, AutoStories,
 } from '@mui/icons-material'
 
 const API_BASE = 'https://equran.id/api/v2/shalat'
@@ -71,11 +71,11 @@ function App({ mode, toggleTheme }) {
     try {
       const s = localStorage.getItem('lastReadSurah')
       if (s) setLastReadSurah(JSON.parse(s))
-    } catch {}
+    } catch { }
     try {
       const s = localStorage.getItem('lastReadAyah')
       if (s) setLastReadAyah(JSON.parse(s))
-    } catch {}
+    } catch { }
 
     const savedSaveReadEnabled = localStorage.getItem('saveReadEnabled')
     if (savedSaveReadEnabled !== null) setSaveReadEnabled(savedSaveReadEnabled === 'true')
@@ -93,7 +93,7 @@ function App({ mode, toggleTheme }) {
 
   // Fetch provinces
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       try {
         const res = await fetch(`${API_BASE}/provinsi`)
         const data = await res.json()
@@ -125,7 +125,7 @@ function App({ mode, toggleTheme }) {
           detectLocation()
         }
       })
-    }).catch(() => {})
+    }).catch(() => { })
   }, [locating, selectedProvince, selectedCity, provinces])
 
   // Auto-trigger adhan
@@ -662,8 +662,8 @@ function App({ mode, toggleTheme }) {
             onChange={(_, v) => setActiveTab(v)}
             variant="fullWidth"
           >
-            <Tab icon={<span style={{ fontSize: '1rem' }}>&#x1F54A;</span>} label="Jadwal" iconPosition="start" />
-            <Tab icon={<MenuBook />} label="Al Qur'an" iconPosition="start" />
+            <Tab icon={<img src="/praying_icon.svg" alt="Jadwal" style={{ width: 25, height: 25, filter: theme.palette.mode === 'dark' ? 'invert(1)' : 'none' }} />} label="Jadwal" iconPosition="start" />
+            <Tab icon={<img src="/quran_icon.svg" alt="Al Qur'an" style={{ width: 25, height: 25, filter: theme.palette.mode === 'dark' ? 'invert(1)' : 'none' }} />} label="Al Qur'an" iconPosition="start" />
             <Tab icon={<AutoStories />} label="Hadits" iconPosition="start" />
           </Tabs>
         </Paper>
